@@ -31,6 +31,4 @@ RUN chown -R appuser:appuser /app/link2media
 
 USER appuser
 
-VOLUME ["/app/data"]
-
 CMD ["python", "-m", "link2media.main"]
