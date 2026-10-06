@@ -119,6 +119,7 @@ async def run_job_pipeline(
                 caption = f"{t(lang, 'video_no_audio_note')}\n\n{caption}"
 
             assert res.file_path is not None
+            logger.info("Uploading %s (%s bytes) to chat %s...", target_type, res.file_size_bytes, job.chat_id)
             if target_type == "video":
                 v_file = FSInputFile(str(res.file_path))
                 th_file = FSInputFile(str(res.thumbnail_path)) if res.thumbnail_path else None
@@ -131,6 +132,7 @@ async def run_job_pipeline(
                     thumbnail=th_file,
                     caption=caption,
                     supports_streaming=True,
+                    request_timeout=300,
                 )
             else:
                 a_file = FSInputFile(str(res.file_path))
@@ -141,7 +143,10 @@ async def run_job_pipeline(
                     title=res.title,
                     performer=session.media_info.uploader,
                     caption=caption,
+                    request_timeout=300,
                 )
+
+            logger.info("Successfully uploaded %s to chat %s", target_type, job.chat_id)
 
             # Stage: Done
             await updater.update(t(lang, "status_done"), force=True)
@@ -282,10 +287,12 @@ async def handle_callback_query(
 
     # Create job
     job_id = uuid.uuid4().hex[:8]
+    job_dir = settings.temp_dir / f"job_{job_id}"
     job = ActiveJob(
         job_id=job_id,
         user_id=user_id,
         chat_id=query.message.chat.id if query.message else user_id,
+        temp_dir=job_dir,
     )
     registered = await queue_mgr.register_job(job)
     if not registered:

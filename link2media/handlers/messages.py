@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from aiogram import Bot, Router
 from aiogram.types import Message
@@ -95,7 +96,7 @@ async def handle_incoming_text(
         user_id=user_id,
         chat_id=message.chat.id,
         media_info=media_info,
-        created_at=uuid.uuid1().time,
+        created_at=time.time(),
         status_message_id=status_msg.message_id,
     )
     queue_mgr.store_session(session)

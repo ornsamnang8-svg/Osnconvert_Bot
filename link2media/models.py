@@ -63,7 +63,8 @@ class MediaInfo:
     def formatted_duration(self) -> str:
         if not self.duration_seconds or self.duration_seconds <= 0:
             return ""
-        mins, secs = divmod(self.duration_seconds, 60)
+        total_sec = int(round(float(self.duration_seconds)))
+        mins, secs = divmod(total_sec, 60)
         hours, mins = divmod(mins, 60)
         if hours > 0:
             return f"{hours}:{mins:02d}:{secs:02d}"

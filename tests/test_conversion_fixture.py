@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 import pytest
 
+from link2media.config import find_binary
 from link2media.convert import (
     convert_to_mp3,
     convert_to_mp4,
@@ -12,8 +13,8 @@ from link2media.convert import (
     probe_file,
 )
 
-FFMPEG_BIN = shutil.which("ffmpeg") or "ffmpeg"
-FFPROBE_BIN = shutil.which("ffprobe") or "ffprobe"
+FFMPEG_BIN = find_binary("ffmpeg") or "ffmpeg"
+FFPROBE_BIN = find_binary("ffprobe") or "ffprobe"
 
 
 @pytest.fixture(scope="module")

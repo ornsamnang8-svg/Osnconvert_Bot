@@ -74,3 +74,40 @@ def test_audio_options_bitrates() -> None:
     opt_192 = AudioOption(bitrate_kbps=192, estimated_size_bytes=est_192)
     assert opt_192.bitrate_kbps == 192
     assert "4.3 MB" in opt_192.display_size
+
+
+def test_formatted_duration_with_float_and_int() -> None:
+    """Verify that formatted_duration handles floats, ints, zero, and long durations cleanly."""
+    from link2media.models import MediaInfo
+
+    info_float = MediaInfo(
+        url="https://example.com/v",
+        platform="youtube",
+        title="Test",
+        duration_seconds=245.8,  # float duration
+    )
+    assert info_float.formatted_duration == "4:06"
+
+    info_int = MediaInfo(
+        url="https://example.com/v",
+        platform="youtube",
+        title="Test",
+        duration_seconds=65,
+    )
+    assert info_int.formatted_duration == "1:05"
+
+    info_hours = MediaInfo(
+        url="https://example.com/v",
+        platform="youtube",
+        title="Test",
+        duration_seconds=3665.4,
+    )
+    assert info_hours.formatted_duration == "1:01:05"
+
+    info_none = MediaInfo(
+        url="https://example.com/v",
+        platform="youtube",
+        title="Test",
+        duration_seconds=None,
+    )
+    assert info_none.formatted_duration == ""

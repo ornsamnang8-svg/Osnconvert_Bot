@@ -74,7 +74,7 @@ def _parse_user_ids(raw: str) -> frozenset[int]:
     return frozenset(ids)
 
 
-def find_binary(name: str, override: str | None) -> str | None:
+def find_binary(name: str, override: str | None = None) -> str | None:
     """Return a usable path for an executable, or ``None`` if not found."""
     if override:
         candidate = Path(override).expanduser()
@@ -91,6 +91,15 @@ def find_binary(name: str, override: str | None) -> str | None:
     local = Path(sys.executable).parent / exe
     if local.is_file():
         return str(local)
+    # Check WinGet packages directory on Windows
+    if os.name == "nt":
+        local_app_data = os.getenv("LOCALAPPDATA", "")
+        if local_app_data:
+            winget_pkgs = Path(local_app_data) / "Microsoft" / "WinGet" / "Packages"
+            if winget_pkgs.is_dir():
+                for p in winget_pkgs.glob(f"**/{exe}"):
+                    if p.is_file():
+                        return str(p)
     return None
 
 

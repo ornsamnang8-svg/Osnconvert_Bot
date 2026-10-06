@@ -127,7 +127,12 @@ def _extract_sync(url: str, platform: str, settings: Settings) -> Tuple[Optional
         return None, "err_live", "Live stream detected"
 
     # Check duration limit
-    duration = info.get("duration")
+    duration_val = info.get("duration")
+    duration: Optional[int] = (
+        int(round(float(duration_val)))
+        if (duration_val is not None and duration_val > 0)
+        else None
+    )
     if duration and duration > settings.max_duration_seconds:
         return None, "err_too_long", f"Duration {duration}s > {settings.max_duration_seconds}s"
 
