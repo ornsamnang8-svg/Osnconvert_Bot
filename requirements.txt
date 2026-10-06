@@ -1,0 +1,11 @@
+# Core Telegram Bot & Video Processing Dependencies
+aiogram==3.31.0
+yt-dlp==2026.8.19
+yt-dlp-ejs==0.8.0
+deno==2.9.7
+python-dotenv==1.2.4
+psutil==7.2.2
+
+# Testing Dependencies
+pytest==9.1.1
+pytest-asyncio==1.4.0
