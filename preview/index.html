@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Link2Media · Telegram Bot Live Interactive Preview</title>
+  <meta name="description" content="Interactive browser simulator for Link2Media Telegram Bot - Experience social media video downloads, quality selection, and Khmer/English localization in real-time.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Global Header -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Link2Media <span class="badge-tag">Bot Preview</span></h1>
+          <p class="brand-sub">Telegram Media Downloader Simulation Environment</p>
+        </div>
+      </div>
+
+      <div class="nav-controls">
+        <div class="lang-switch-wrapper">
+          <button id="langToggleBtn" class="lang-btn" title="Toggle Language">
+            <span class="flag" id="currentLangFlag">🇰🇭</span>
+            <span class="lang-label" id="currentLangName">ភាសាខ្មែរ</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="lang-dropdown" id="langDropdown">
+            <button class="lang-item" data-lang="km">
+              <span>🇰🇭</span> ភាសាខ្មែរ (Khmer - Default)
+            </button>
+            <button class="lang-item" data-lang="en">
+              <span>🇬🇧</span> English
+            </button>
+          </div>
+        </div>
+
+        <button id="resetChatBtn" class="action-btn secondary" title="Restart Session">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+          <span>Reset Chat</span>
+        </button>
+
+        <a href="https://github.com" target="_blank" class="action-btn github-btn">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          <span>v1.0.0</span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="workspace-grid">
+      <!-- Left Panel: Telegram Phone / Desktop Mockup -->
+      <section class="telegram-mockup-wrapper">
+        <div class="telegram-window">
+          <!-- Telegram Chat Header -->
+          <div class="chat-header">
+            <div class="chat-avatar">
+              <span class="avatar-emoji">🎬</span>
+              <span class="bot-badge">bot</span>
+            </div>
+            <div class="chat-title-group">
+              <div class="chat-name">
+                <span>Link2Media</span>
+                <span class="verified-icon" title="Verified Bot">✓</span>
+              </div>
+              <div class="chat-status">
+                <span class="status-dot"></span>
+                <span>bot • active polling</span>
+              </div>
+            </div>
+            <div class="chat-header-actions">
+              <button class="icon-btn" id="helpShortcutBtn" title="Help">ℹ️</button>
+              <button class="icon-btn" id="langShortcutBtn" title="Language">🌐</button>
+            </div>
+          </div>
+
+          <!-- Telegram Message Feed -->
+          <div class="chat-messages" id="chatMessages">
+            <div class="date-divider">
+              <span>Today</span>
+            </div>
+            <!-- Messages inserted dynamically via app.js -->
+          </div>
+
+          <!-- Quick Action Chips Bar -->
+          <div class="quick-chips-bar" id="quickChipsBar">
+            <span class="chip-label">Quick Test Links:</span>
+            <button class="chip" data-url="https://youtube.com/shorts/dQw4w9WgXcQ">🎥 YouTube Shorts</button>
+            <button class="chip" data-url="https://www.tiktok.com/@creator/video/72123456789">🎵 TikTok</button>
+            <button class="chip" data-url="https://www.facebook.com/reel/987654321">📘 FB Reel</button>
+            <button class="chip" data-url="https://www.instagram.com/reel/CxY123abc">📸 Instagram</button>
+            <button class="chip" data-url="https://x.com/tech/status/178901234">🐦 X / Twitter</button>
+          </div>
+
+          <!-- Telegram Input Area -->
+          <div class="chat-input-bar">
+            <div class="command-popup-trigger" id="cmdBtn" title="Commands">/</div>
+            <div class="input-wrapper">
+              <input type="text" id="messageInput" placeholder="Send a video link or command (/help, /language)..." autocomplete="off">
+            </div>
+            <button id="sendBtn" class="send-btn" title="Send">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Diagnostics, Architecture, and Pipeline Inspector -->
+      <aside class="sidebar-inspector">
+        <!-- Live Job Status Card -->
+        <div class="inspector-card">
+          <div class="card-head">
+            <span class="card-title">⚡ Job Pipeline Inspector</span>
+            <span class="badge" id="inspectorStageBadge">IDLE</span>
+          </div>
+          <div class="stage-pipeline-visual">
+            <div class="pipeline-step" id="stepChecking">
+              <span class="step-num">1</span>
+              <span class="step-name">Checking</span>
+            </div>
+            <div class="pipeline-step" id="stepQueued">
+              <span class="step-num">2</span>
+              <span class="step-name">Queued</span>
+            </div>
+            <div class="pipeline-step" id="stepDownloading">
+              <span class="step-num">3</span>
+              <span class="step-name">Downloading</span>
+            </div>
+            <div class="pipeline-step" id="stepConverting">
+              <span class="step-num">4</span>
+              <span class="step-name">Converting</span>
+            </div>
+            <div class="pipeline-step" id="stepUploading">
+              <span class="step-num">5</span>
+              <span class="step-name">Uploading</span>
+            </div>
+            <div class="pipeline-step" id="stepDone">
+              <span class="step-num">6</span>
+              <span class="step-name">Done</span>
+            </div>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" id="pipelineProgressFill"></div>
+          </div>
+          <div class="pipeline-meta" id="pipelineMetaText">Waiting for user interaction...</div>
+        </div>
+
+        <!-- Configuration Parameters Card -->
+        <div class="inspector-card">
+          <div class="card-head">
+            <span class="card-title">🛡️ Active Security & Limits</span>
+          </div>
+          <div class="limits-list">
+            <div class="limit-item">
+              <span class="lbl">Max Duration:</span>
+              <span class="val">20 minutes (1200s)</span>
+            </div>
+            <div class="limit-item">
+              <span class="lbl">Upload Budget:</span>
+              <span class="val">48,000,000 bytes (48 MB)</span>
+            </div>
+            <div class="limit-item">
+              <span class="lbl">Telegram Cap:</span>
+              <span class="val">50 MB (Strict Bot API Limit)</span>
+            </div>
+            <div class="limit-item">
+              <span class="lbl">SSRF Protection:</span>
+              <span class="val tag-green">ENABLED (DNS Guard)</span>
+            </div>
+            <div class="limit-item">
+              <span class="lbl">No-Upscaling Policy:</span>
+              <span class="val tag-green">ACTIVE (<= Source Res)</span>
+            </div>
+            <div class="limit-item">
+              <span class="lbl">Audio Codec:</span>
+              <span class="val">libmp3lame (128k / 192k)</span>
+            </div>
+            <div class="limit-item">
+              <span class="lbl">Video Codec:</span>
+              <span class="val">H.264 / AAC (yuv420p +faststart)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Log Feed -->
+        <div class="inspector-card log-card">
+          <div class="card-head">
+            <span class="card-title">📜 Bot Terminal Logs</span>
+            <button id="clearLogsBtn" class="mini-btn">Clear</button>
+          </div>
+          <div class="terminal-log-feed" id="terminalLogs">
+            <div class="log-line info">[INFO] Link2Media Bot initialized in preview mode.</div>
+            <div class="log-line info">[INFO] SQLite preference engine ready at data/link2media.sqlite3</div>
+            <div class="log-line info">[INFO] Concurrency worker pool initialized (max_concurrent=2)</div>
+            <div class="log-line info">[INFO] Ready. Send a link to begin media processing.</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
