@@ -80,7 +80,7 @@ def _build_ydl_opts(settings: Settings, custom_opts: Optional[Dict[str, Any]] = 
     }
 
     if settings.deno_path:
-        opts["js_runtimes"] = {"deno": settings.deno_path}
+        opts["js_runtimes"] = {"deno": {"path": settings.deno_path}}
 
     if settings.ffmpeg_path:
         opts["ffmpeg_location"] = settings.ffmpeg_path

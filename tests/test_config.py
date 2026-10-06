@@ -1,21 +1,21 @@
 """Tests for configuration loading, validation, and secret protection."""
 
-import os
+from pathlib import Path
 import pytest
 from link2media.config import ConfigError, load_settings
 
 
-def test_missing_token_raises_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_token_raises_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv("BOT_TOKEN", raising=False)
     with pytest.raises(ConfigError) as exc_info:
-        load_settings(require_token=True)
+        load_settings(env_file=tmp_path / ".empty", require_token=True)
     assert "BOT_TOKEN is missing" in str(exc_info.value)
 
 
-def test_invalid_token_format(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_invalid_token_format(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("BOT_TOKEN", "bad_token_format")
     with pytest.raises(ConfigError) as exc_info:
-        load_settings(require_token=True)
+        load_settings(env_file=tmp_path / ".empty", require_token=True)
     assert "BOT_TOKEN does not look like a Telegram bot token" in str(exc_info.value)
 
 
