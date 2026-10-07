@@ -52,10 +52,18 @@ def probe_file_sync(ffprobe_bin: str, file_path: Path) -> Dict[str, Any]:
         str(file_path),
     ]
     try:
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
         return json.loads(res.stdout)
     except Exception as exc:
-        logger.warning("ffprobe failed on %s: %s", file_path, exc)
+        logger.warning("ffprobe failed on %s: %s", str(file_path), exc)
         return {}
 
 
