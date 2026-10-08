@@ -268,6 +268,7 @@ def _extract_sync(url: str, platform: str, settings: Settings) -> Tuple[Optional
         video_qualities=video_options,
         audio_options=audio_options,
         webpage_url=info.get("webpage_url") or url,
+        description=info.get("description"),
     )
     return media_info, None, None
 

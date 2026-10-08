@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import time
 import uuid
@@ -12,11 +13,11 @@ from ..config import Settings
 from ..db import get_user_language
 from ..extract import extract_media_info
 from ..i18n import t
-from ..models import UserSession
+from ..models import TextSession, UserSession
 from ..queue_manager import QueueManager
 from ..security import extract_urls, validate_url
 from .commands import is_allowed_user
-from .keyboards import make_action_keyboard
+from .keyboards import make_action_keyboard, make_text_action_keyboard
 from .ui_helpers import format_media_card
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ async def handle_incoming_text(
     settings: Settings,
     queue_mgr: QueueManager,
 ) -> None:
-    """Process incoming chat messages containing media URLs."""
+    """Process incoming chat messages containing media URLs or text to translate/summarize."""
     if message.chat.type != "private":
         await message.reply(t("en", "private_chat_only"))
         return
@@ -45,6 +46,22 @@ async def handle_incoming_text(
 
     urls = extract_urls(text)
     if not urls:
+        if len(text) >= 2:
+            session_id = uuid.uuid4().hex[:8]
+            session = TextSession(
+                session_id=session_id,
+                user_id=user_id,
+                chat_id=message.chat.id,
+                text=text,
+                created_at=time.time(),
+            )
+            queue_mgr.store_text_session(session)
+            escaped_snippet = html.escape(text[:200] + ("…" if len(text) > 200 else ""))
+            reply_text = f"{t(lang, 'text_options_title')}\n\n<i>\"{escaped_snippet}\"</i>"
+            kb = make_text_action_keyboard(session_id, lang)
+            await message.reply(reply_text, reply_markup=kb, parse_mode="HTML")
+            return
+
         await message.reply(t(lang, "send_link_hint"))
         return
 

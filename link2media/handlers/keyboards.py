@@ -37,12 +37,35 @@ def make_action_keyboard(session_id: str, lang: str, media_info: MediaInfo) -> I
             [InlineKeyboardButton(text=t(lang, "btn_mp3"), callback_data=f"act:a:{session_id}")]
         )
 
+    # AI Translation & Summarization buttons
+    rows.append(
+        [
+            InlineKeyboardButton(text=t(lang, "btn_translate"), callback_data=f"ai:tr:{session_id}"),
+            InlineKeyboardButton(text=t(lang, "btn_summarize"), callback_data=f"ai:sm:{session_id}"),
+        ]
+    )
+
     # Cancel button
     rows.append(
         [InlineKeyboardButton(text=t(lang, "btn_cancel"), callback_data=f"act:c:{session_id}")]
     )
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def make_text_action_keyboard(session_id: str, lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for incoming plain text messages."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=t(lang, "btn_translate"), callback_data=f"txt:tr:{session_id}"),
+                InlineKeyboardButton(text=t(lang, "btn_summarize"), callback_data=f"txt:sm:{session_id}"),
+            ],
+            [
+                InlineKeyboardButton(text=t(lang, "btn_cancel"), callback_data=f"txt:c:{session_id}"),
+            ],
+        ]
+    )
 
 
 def make_video_qualities_keyboard(

@@ -58,6 +58,7 @@ class MediaInfo:
     video_qualities: List[VideoQualityOption] = field(default_factory=list)
     audio_options: List[AudioOption] = field(default_factory=list)
     webpage_url: Optional[str] = None
+    description: Optional[str] = None
 
     @property
     def formatted_duration(self) -> str:
@@ -79,6 +80,18 @@ class UserSession:
     user_id: int
     chat_id: int
     media_info: MediaInfo
+    created_at: float
+    status_message_id: Optional[int] = None
+
+
+@dataclass
+class TextSession:
+    """Temporary state storing plain text awaiting translation or summarization."""
+
+    session_id: str
+    user_id: int
+    chat_id: int
+    text: str
     created_at: float
     status_message_id: Optional[int] = None
 

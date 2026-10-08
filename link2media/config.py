@@ -135,6 +135,7 @@ class Settings:
     ffprobe_path: str = "ffprobe"
     deno_path: str | None = None
     log_level: str = "INFO"
+    gemini_api_key: str | None = field(default=None, repr=False)
 
     def worker_limits(self) -> dict:
         """Plain-data limits passed to worker processes (no secrets)."""
@@ -220,4 +221,5 @@ def load_settings(env_file: str | os.PathLike | None = None, *,
         ffprobe_path=ffprobe or "",
         deno_path=deno,
         log_level=log_level,
+        gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip() or None,
     )

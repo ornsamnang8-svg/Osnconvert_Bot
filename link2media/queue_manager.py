@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, Optional, Set
 
 from .config import Settings
-from .models import DownloadResult, JobProgress, UserSession
+from .models import DownloadResult, JobProgress, TextSession, UserSession
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ class QueueManager:
         self.active_jobs: Dict[str, ActiveJob] = {}  # job_id -> ActiveJob
         self.user_to_job: Dict[int, str] = {}  # user_id -> job_id
         self.sessions: Dict[str, UserSession] = {}  # session_id -> UserSession
+        self.text_sessions: Dict[str, TextSession] = {}  # session_id -> TextSession
         self._waiting_count = 0
         self._lock = asyncio.Lock()
 
@@ -80,6 +81,26 @@ class QueueManager:
         expired = [sid for sid, s in self.sessions.items() if now - s.created_at > ttl]
         for sid in expired:
             self.sessions.pop(sid, None)
+
+    # ---------------- Text Session Handling ----------------
+
+    def store_text_session(self, session: TextSession) -> None:
+        self.expire_stale_text_sessions()
+        self.text_sessions[session.session_id] = session
+
+    def get_text_session(self, session_id: str) -> Optional[TextSession]:
+        self.expire_stale_text_sessions()
+        return self.text_sessions.get(session_id)
+
+    def remove_text_session(self, session_id: str) -> None:
+        self.text_sessions.pop(session_id, None)
+
+    def expire_stale_text_sessions(self) -> None:
+        now = time.time()
+        ttl = self.settings.session_ttl
+        expired = [sid for sid, s in self.text_sessions.items() if now - s.created_at > ttl]
+        for sid in expired:
+            self.text_sessions.pop(sid, None)
 
     # ---------------- Job Handling ----------------
 

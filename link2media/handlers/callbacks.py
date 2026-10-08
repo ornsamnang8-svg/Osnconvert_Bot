@@ -8,8 +8,9 @@ import uuid
 from typing import Optional
 
 from aiogram import Bot, Router
-from aiogram.types import CallbackQuery, FSInputFile
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
+from ..ai_service import summarize_in_khmer, translate_to_khmer
 from ..config import Settings
 from ..db import get_user_language, set_user_language
 from ..download import execute_download_job
@@ -181,13 +182,50 @@ async def handle_callback_query(
             await query.message.edit_text(t(new_lang, "language_set"))
         return
 
-    # Check for session-based callbacks: act:*, vq:*, aq:*
+    # Check for session-based callbacks: act:*, vq:*, aq:*, ai:*, txt:*
     parts = data.split(":")
     if len(parts) < 3:
         await query.answer(t(lang, "expired_button"), show_alert=True)
         return
 
     prefix, action_val, session_id = parts[0], parts[1], parts[2]
+
+    # Handle text session callbacks: txt:*
+    if prefix == "txt":
+        txt_session = queue_mgr.get_text_session(session_id)
+        if not txt_session:
+            await query.answer(t(lang, "expired_button"), show_alert=True)
+            return
+        if txt_session.user_id != user_id:
+            await query.answer(t(lang, "not_your_button"), show_alert=True)
+            return
+
+        if action_val == "c":
+            await query.answer()
+            queue_mgr.remove_text_session(session_id)
+            if query.message:
+                await query.message.edit_text(t(lang, "cancelled"))
+            return
+
+        await query.answer()
+        if action_val == "tr":
+            if query.message:
+                await query.message.edit_text(t(lang, "status_translating"))
+            result = await translate_to_khmer(txt_session.text, settings.gemini_api_key, lang)
+            header = t(lang, "translate_result_title")
+        else:
+            if query.message:
+                await query.message.edit_text(t(lang, "status_summarizing"))
+            result = await summarize_in_khmer(txt_session.text, settings.gemini_api_key, lang)
+            header = t(lang, "summarize_result_title")
+
+        output_text = f"{header}\n\n{result}"
+        if len(output_text) > 4000:
+            output_text = output_text[:3990] + "…"
+        if query.message:
+            await query.message.edit_text(output_text, parse_mode="HTML")
+        return
+
     session = queue_mgr.get_session(session_id)
     if not session:
         await query.answer(t(lang, "expired_button"), show_alert=True)
@@ -196,6 +234,40 @@ async def handle_callback_query(
     # Button ownership check
     if session.user_id != user_id:
         await query.answer(t(lang, "not_your_button"), show_alert=True)
+        return
+
+    # AI translation / summarization for media session
+    if prefix == "ai":
+        await query.answer()
+        title = session.media_info.title
+        desc = (session.media_info.description or "").strip()
+        media_text = f"{title}\n\n{desc}".strip() if desc else title
+
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text=t(lang, "btn_back"), callback_data=f"act:b:{session_id}"),
+                    InlineKeyboardButton(text=t(lang, "btn_cancel"), callback_data=f"act:c:{session_id}"),
+                ]
+            ]
+        )
+
+        if action_val == "tr":
+            if query.message:
+                await query.message.edit_text(t(lang, "status_translating"))
+            result = await translate_to_khmer(media_text, settings.gemini_api_key, lang)
+            header = t(lang, "translate_result_title")
+        else:
+            if query.message:
+                await query.message.edit_text(t(lang, "status_summarizing"))
+            result = await summarize_in_khmer(media_text, settings.gemini_api_key, lang)
+            header = t(lang, "summarize_result_title")
+
+        output_text = f"{header}\n\n{result}"
+        if len(output_text) > 4000:
+            output_text = output_text[:3990] + "…"
+        if query.message:
+            await query.message.edit_text(output_text, reply_markup=back_kb, parse_mode="HTML")
         return
 
     # 2. Main menu choices
