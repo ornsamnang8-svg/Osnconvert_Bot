@@ -8,8 +8,6 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
-
 API_KEY_HINT_KM = (
     "⚠️ <b>មិនទាន់បានកំណត់ GEMINI_API_KEY</b>\n\n"
     "ដើម្បីដំណើរការមុខងារ <b>បកប្រែ</b> និង <b>សង្ខេបខ្លឹមសារ</b> ដោយ AI សូម៖\n"
@@ -30,24 +28,41 @@ API_KEY_HINT_EN = (
     "4. Restart the bot."
 )
 
-
 MODELS_TO_TRY = [
-    "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
     "gemini-flash-latest",
 ]
 
+SYSTEM_PROMPT = (
+    "You are a native Cambodian professional linguist and translator specialized strictly in the Khmer language (ភាសាខ្មែរ).\n"
+    "CRITICAL MANDATORY RULES:\n"
+    "1. You must write EXCLUSIVELY in 100% pure Cambodian Khmer language and Khmer script (អក្សរខ្មែរ).\n"
+    "2. ABSOLUTELY FORBIDDEN: NEVER use, mix, or output ANY Thai language (ภาษาไทย), Thai script (Unicode range U+0E00 to U+0E7F), Thai vocabulary, or Lao script under any circumstance.\n"
+    "3. Use standard Cambodian vocabulary, proper spelling, and natural Khmer phrasing.\n"
+    "4. Preserve emojis, numbers, and URLs without modification."
+)
+
+
+def contains_thai_characters(text: str) -> bool:
+    """Check if string contains any Thai Unicode characters (U+0E00 to U+0E7F)."""
+    return any("\u0e00" <= c <= "\u0e7f" for c in text)
 
 
 async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int = 45) -> str:
-    """Call Google Gemini generateContent endpoint with automatic model failover."""
+    """Call Google Gemini generateContent endpoint with automatic model failover and strict Khmer enforcement."""
     payload = {
+        "systemInstruction": {
+            "parts": [
+                {"text": SYSTEM_PROMPT}
+            ]
+        },
         "contents": [
             {"parts": [{"text": prompt}]}
         ],
         "generationConfig": {
-            "temperature": 0.3,
+            "temperature": 0.1,
             "maxOutputTokens": 2048,
         }
     }
@@ -66,7 +81,26 @@ async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int 
                         if candidates:
                             parts = candidates[0].get("content", {}).get("parts", [])
                             if parts:
-                                return parts[0].get("text", "").strip()
+                                text_result = parts[0].get("text", "").strip()
+                                # Guard against any leaked Thai characters
+                                if contains_thai_characters(text_result):
+                                    logger.warning("Output from %s contained Thai script, cleaning...", model)
+                                    # Request immediate pure-Khmer rewrite
+                                    rewrite_payload = {
+                                        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                                        "contents": [{"parts": [{"text": f"Remove all Thai characters and rewrite entirely in 100% pure Khmer language:\n\n{text_result}"}]}],
+                                        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 2048}
+                                    }
+                                    async with session.post(url, json=rewrite_payload) as fix_resp:
+                                        if fix_resp.status == 200:
+                                            fix_data = await fix_resp.json()
+                                            fix_candidates = fix_data.get("candidates") or []
+                                            if fix_candidates:
+                                                fix_parts = fix_candidates[0].get("content", {}).get("parts", [])
+                                                if fix_parts:
+                                                    return fix_parts[0].get("text", "").strip()
+
+                                return text_result
                     elif resp.status in (429, 503):
                         logger.warning("Gemini model %s busy (%s), trying fallback...", model, resp.status)
                         continue
@@ -83,13 +117,12 @@ async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int 
     raise RuntimeError("All Gemini models were temporarily busy. Please retry.")
 
 
-
 async def translate_to_khmer(
     text: str,
     api_key: Optional[str] = None,
     lang: str = "km",
 ) -> str:
-    """Translate text to Khmer. Uses Gemini if API key is provided."""
+    """Translate text strictly into 100% pure Khmer without any Thai language."""
     cleaned_text = text.strip()
     if not cleaned_text:
         return "❌ មិនមានអត្ថបទសម្រាប់បកប្រែទេ (Empty text)"
@@ -98,12 +131,12 @@ async def translate_to_khmer(
         return API_KEY_HINT_KM if lang == "km" else API_KEY_HINT_EN
 
     prompt = (
-        "You are an expert bilingual translator specialized in English and Khmer. "
-        "Translate the following text into fluent, natural Khmer (ភាសាខ្មែរ).\n"
-        "Guidelines:\n"
-        "- Maintain exact meaning, tone, and appropriate Khmer vocabulary.\n"
-        "- Keep emojis, mentions, links, or technical identifiers unchanged.\n"
-        "- Output ONLY the translated Khmer text, without intro or outro.\n\n"
+        "Translate the following text into 100% pure Cambodian Khmer language (ភាសាខ្មែរ).\n\n"
+        "STRICT MANDATORY REQUIREMENTS:\n"
+        "- Write strictly in Cambodian Khmer script (អក្សរខ្មែរ).\n"
+        "- DO NOT use, borrow, or mix ANY Thai language (ภาษาไทย) or Thai characters.\n"
+        "- Ensure smooth, natural, and accurate Cambodian Khmer phrasing.\n"
+        "- Output ONLY the translated Khmer text without intro or outro.\n\n"
         f"Original text:\n{cleaned_text}"
     )
 
@@ -120,7 +153,7 @@ async def summarize_in_khmer(
     api_key: Optional[str] = None,
     lang: str = "km",
 ) -> str:
-    """Summarize text in Khmer. Uses Gemini if API key is provided."""
+    """Summarize text strictly into 100% pure Khmer without any Thai language."""
     cleaned_text = text.strip()
     if not cleaned_text:
         return "❌ មិនមានអត្ថបទសម្រាប់សង្ខេបទេ (Empty text)"
@@ -129,12 +162,12 @@ async def summarize_in_khmer(
         return API_KEY_HINT_KM if lang == "km" else API_KEY_HINT_EN
 
     prompt = (
-        "You are an expert content analyzer. "
-        "Summarize the following content clearly and concisely in natural Khmer (ភាសាខ្មែរ).\n"
-        "Guidelines:\n"
-        "- Structure with key takeaway points (bullet points using • or 🔹).\n"
-        "- Highlight core ideas, context, and conclusion.\n"
-        "- Write naturally in fluent Khmer.\n"
+        "Summarize the following content concisely and clearly in 100% pure Cambodian Khmer language (ភាសាខ្មែរ).\n\n"
+        "STRICT MANDATORY REQUIREMENTS:\n"
+        "- Write strictly in Cambodian Khmer script (អក្សរខ្មែរ).\n"
+        "- DO NOT use, borrow, or mix ANY Thai language (ภาษาไทย) or Thai characters.\n"
+        "- Highlight core ideas using clean bullet points (🔹 or •).\n"
+        "- Write naturally and elegantly in Cambodian Khmer.\n"
         "- Output ONLY the summary in Khmer.\n\n"
         f"Content to summarize:\n{cleaned_text}"
     )
