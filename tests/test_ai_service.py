@@ -40,3 +40,24 @@ def test_text_action_keyboard():
     assert "txt:tr:sess123" in callbacks
     assert "txt:sm:sess123" in callbacks
     assert "txt:c:sess123" in callbacks
+
+
+@pytest.mark.asyncio
+async def test_translate_media_segmented():
+    from link2media.ai_service import translate_media_segmented
+    with patch("link2media.ai_service._call_gemini_generate", new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = "1️⃣ ចំណងជើង\n2️⃣ ការពិពណ៌នា\n3️⃣ សំឡេង"
+        res = await translate_media_segmented("Title", "Desc", "Transcript", api_key="test_key", lang="km")
+        assert "ចំណងជើង" in res
+        assert mock_call.called
+
+
+@pytest.mark.asyncio
+async def test_summarize_media_speech():
+    from link2media.ai_service import summarize_media_speech
+    with patch("link2media.ai_service._call_gemini_generate", new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = "🔹 ចំណុចសំខាន់"
+        res = await summarize_media_speech("Title", "Desc", "Transcript", api_key="test_key", lang="km")
+        assert "ចំណុចសំខាន់" in res
+        assert mock_call.called
+

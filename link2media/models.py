@@ -59,6 +59,7 @@ class MediaInfo:
     audio_options: List[AudioOption] = field(default_factory=list)
     webpage_url: Optional[str] = None
     description: Optional[str] = None
+    transcript: Optional[str] = None
 
     @property
     def formatted_duration(self) -> str:

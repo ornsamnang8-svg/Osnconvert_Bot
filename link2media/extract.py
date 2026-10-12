@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
+import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 
 import yt_dlp
+
 
 from .config import Settings
 from .models import AudioOption, MediaInfo, VideoQualityOption
@@ -293,3 +297,79 @@ async def extract_media_info(
     except Exception as exc:
         logger.exception("Error extracting metadata for %s: %s", url, exc)
         return None, "err_internal", str(exc)
+
+
+def _extract_transcript_sync(url: str) -> Optional[str]:
+    """Download and clean subtitles/closed captions for a video URL."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with yt_dlp.YoutubeDL({"skip_download": True, "quiet": True, "no_warnings": True}) as ydl:
+            try:
+                info = ydl.extract_info(url, download=False)
+            except Exception as exc:
+                logger.warning("Failed to extract info for transcript from %s: %s", url, exc)
+                return None
+
+        if not info:
+            return None
+
+        subs = info.get("subtitles") or {}
+        auto_subs = info.get("automatic_captions") or {}
+        all_langs = list(subs.keys()) + list(auto_subs.keys())
+        if not all_langs:
+            return None
+
+        # Prioritize khmer, english, or first available language
+        target_lang = None
+        for lang in ("km", "en", "en-US", "en-GB", "orig"):
+            if lang in all_langs:
+                target_lang = lang
+                break
+        if not target_lang:
+            target_lang = all_langs[0]
+
+        opts = {
+            "skip_download": True,
+            "writesubtitles": True,
+            "writeautomaticsub": True,
+            "subtitleslangs": [target_lang],
+            "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
+            "quiet": True,
+            "no_warnings": True,
+        }
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            try:
+                ydl.download([url])
+            except Exception as exc:
+                logger.warning("Error downloading subtitle for %s: %s", url, exc)
+
+        files = [f for f in os.listdir(tmpdir) if f.endswith((".vtt", ".srt", ".ttml"))]
+        if not files:
+            return None
+
+        with open(os.path.join(tmpdir, files[0]), "r", encoding="utf-8", errors="replace") as s:
+            content = s.read()
+
+        lines: List[str] = []
+        for l in content.splitlines():
+            l = l.strip()
+            if not l or l.startswith(("WEBVTT", "Kind:", "Language:", "NOTE")) or "-->" in l:
+                continue
+            cleaned = re.sub(r"<[^>]+>", "", l).strip()
+            if cleaned and (not lines or lines[-1] != cleaned):
+                lines.append(cleaned)
+
+        transcript = " ".join(lines).strip()
+        return transcript or None
+
+
+async def extract_video_transcript(url: str, timeout: int = 30) -> Optional[str]:
+    """Asynchronously extract video spoken transcript with timeout guard."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_extract_transcript_sync, url),
+            timeout=timeout,
+        )
+    except Exception as exc:
+        logger.warning("Failed to extract transcript for %s: %s", url, exc)
+        return None
+

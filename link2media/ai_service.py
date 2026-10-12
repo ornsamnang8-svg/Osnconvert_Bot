@@ -178,3 +178,85 @@ async def summarize_in_khmer(
         logger.exception("Failed to summarize via Gemini: %s", exc)
         err_msg = "❌ ការសង្ខេបមានបញ្ហា សូមព្យាយាមម្តងទៀត" if lang == "km" else "❌ Summarization error, please try again"
         return f"{err_msg}\n<code>{exc}</code>"
+
+
+async def translate_media_segmented(
+    title: str,
+    description: Optional[str],
+    transcript: Optional[str],
+    api_key: Optional[str],
+    lang: str = "km",
+) -> str:
+    """Translate media into 3 distinct sections: Title, Description, and Spoken Speech/Transcript."""
+    if not api_key:
+        return API_KEY_HINT_KM if lang == "km" else API_KEY_HINT_EN
+
+    desc_clean = (description or "").strip()
+    trans_clean = (transcript or "").strip()
+
+    prompt = (
+        "You are an expert native Cambodian translator. Translate the following video elements into 100% pure Khmer language (ភាសាខ្មែរ).\n\n"
+        "STRICT MANDATORY RULES:\n"
+        "1. Write EXCLUSIVELY in pure Cambodian Khmer script (អក្សរខ្មែរ). Absolutely NO Thai language (ภาษาไทย) or Thai characters.\n"
+        "2. Translate all available sections accurately.\n"
+        "3. Output STRICTLY in the following 3-part format:\n\n"
+        "1️⃣ <b>ចំណងជើង (Title)៖</b>\n"
+        "[Khmer translation of Title]\n\n"
+        "2️⃣ <b>សេចក្តីពិពណ៌នា (Description)៖</b>\n"
+        "[Khmer translation of Description, or '(គ្មានសេចក្តីពិពណ៌នា)' if empty]\n\n"
+        "3️⃣ <b>បកប្រែចេញពីសំឡេងនិយាយផ្ទាល់ក្នុងវីដេអូ (Speech / Transcript)៖</b>\n"
+        "[Khmer translation of the spoken transcript, or '(វីដេអូនេះមិនមានអត្ថបទសំឡេង/Subtitle សម្រាប់ស្រង់ចេញទេ)' if empty]\n\n"
+        f"Input Title:\n{title}\n\n"
+        f"Input Description:\n{desc_clean if desc_clean else '(None)'}\n\n"
+        f"Input Spoken Transcript:\n{trans_clean[:3500] if trans_clean else '(None)'}"
+    )
+
+    try:
+        return await _call_gemini_generate(prompt, api_key)
+    except Exception as exc:
+        logger.exception("Failed to translate media segmented: %s", exc)
+        err_msg = "❌ ការបកប្រែមានបញ្ហា សូមព្យាយាមម្តងទៀត" if lang == "km" else "❌ Translation error, please try again"
+        return f"{err_msg}\n<code>{exc}</code>"
+
+
+async def summarize_media_speech(
+    title: str,
+    description: Optional[str],
+    transcript: Optional[str],
+    api_key: Optional[str],
+    lang: str = "km",
+) -> str:
+    """Summarize video focusing directly on its spoken speech/transcript."""
+    if not api_key:
+        return API_KEY_HINT_KM if lang == "km" else API_KEY_HINT_EN
+
+    desc_clean = (description or "").strip()
+    trans_clean = (transcript or "").strip()
+
+    if trans_clean:
+        content_to_summarize = f"Video Title: {title}\nSpoken Speech/Transcript:\n{trans_clean[:4000]}"
+        focus_instruction = "Summarize specifically from the video's spoken dialogue and speech (សំឡេងនិយាយផ្ទាល់ក្នុងវីដេអូ)."
+        note_prefix = "📝 <b>ការសង្ខេបខ្លឹមសារចេញពីសំឡេងនិយាយផ្ទាល់ក្នុងវីដេអូ៖</b>\n\n"
+    else:
+        content_to_summarize = f"Video Title: {title}\nDescription:\n{desc_clean}"
+        focus_instruction = "Since spoken transcript is unavailable, summarize the video's content and description."
+        note_prefix = "📝 <b>ការសង្ខេបខ្លឹមសារវីដេអូ (សង្ខេបពីការពិពណ៌នា ដោយសារគ្មាន Subtitle)៖</b>\n\n"
+
+    prompt = (
+        f"You are an expert content analyzer. {focus_instruction}\n"
+        "Write strictly in 100% pure Cambodian Khmer language (ភាសាខ្មែរ).\n\n"
+        "STRICT MANDATORY RULES:\n"
+        "1. Write EXCLUSIVELY in pure Cambodian Khmer script (អក្សរខ្មែរ). Absolutely NO Thai language (ภาษาไทย) or Thai characters.\n"
+        "2. Structure with clear, high-value key takeaways using bullet points (🔹 or •).\n"
+        "3. Output ONLY the summary points in Khmer without intro or outro.\n\n"
+        f"Content to summarize:\n{content_to_summarize}"
+    )
+
+    try:
+        summary_body = await _call_gemini_generate(prompt, api_key)
+        return f"{note_prefix}{summary_body}"
+    except Exception as exc:
+        logger.exception("Failed to summarize media speech: %s", exc)
+        err_msg = "❌ ការសង្ខេបមានបញ្ហា សូមព្យាយាមម្តងទៀត" if lang == "km" else "❌ Summarization error, please try again"
+        return f"{err_msg}\n<code>{exc}</code>"
+

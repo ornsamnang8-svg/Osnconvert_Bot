@@ -10,10 +10,16 @@ from typing import Optional
 from aiogram import Bot, Router
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
-from ..ai_service import summarize_in_khmer, translate_to_khmer
+from ..ai_service import (
+    summarize_in_khmer,
+    summarize_media_speech,
+    translate_media_segmented,
+    translate_to_khmer,
+)
 from ..config import Settings
 from ..db import get_user_language, set_user_language
 from ..download import execute_download_job
+from ..extract import extract_video_transcript
 from ..i18n import t
 from ..models import DownloadResult, JobProgress, UserSession
 from ..queue_manager import ActiveJob, QueueManager
@@ -239,9 +245,6 @@ async def handle_callback_query(
     # AI translation / summarization for media session
     if prefix == "ai":
         await query.answer()
-        title = session.media_info.title
-        desc = (session.media_info.description or "").strip()
-        media_text = f"{title}\n\n{desc}".strip() if desc else title
 
         back_kb = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -252,18 +255,34 @@ async def handle_callback_query(
             ]
         )
 
+        # Extract transcript / subtitles if not already extracted
+        if session.media_info.transcript is None:
+            if query.message:
+                await query.message.edit_text(t(lang, "status_extracting_transcript"))
+            session.media_info.transcript = await extract_video_transcript(session.media_info.url)
+
         if action_val == "tr":
             if query.message:
                 await query.message.edit_text(t(lang, "status_translating"))
-            result = await translate_to_khmer(media_text, settings.gemini_api_key, lang)
-            header = t(lang, "translate_result_title")
+            result = await translate_media_segmented(
+                title=session.media_info.title,
+                description=session.media_info.description,
+                transcript=session.media_info.transcript,
+                api_key=settings.gemini_api_key,
+                lang=lang,
+            )
+            output_text = f"🌐 <b>ការបកប្រែជាភាសាខ្មែរ៖</b>\n\n{result}"
         else:
             if query.message:
                 await query.message.edit_text(t(lang, "status_summarizing"))
-            result = await summarize_in_khmer(media_text, settings.gemini_api_key, lang)
-            header = t(lang, "summarize_result_title")
+            output_text = await summarize_media_speech(
+                title=session.media_info.title,
+                description=session.media_info.description,
+                transcript=session.media_info.transcript,
+                api_key=settings.gemini_api_key,
+                lang=lang,
+            )
 
-        output_text = f"{header}\n\n{result}"
         if len(output_text) > 4000:
             output_text = output_text[:3990] + "…"
         if query.message:
