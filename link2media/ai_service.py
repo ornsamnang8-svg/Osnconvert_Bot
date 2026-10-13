@@ -31,10 +31,10 @@ API_KEY_HINT_EN = (
 )
 
 MODELS_TO_TRY = [
-    "gemini-3.5-flash",
-    "gemini-3.8-flash",
     "gemini-3.5-flash-lite",
     "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-3.8-flash",
 ]
 
 SYSTEM_PROMPT = (
@@ -52,17 +52,17 @@ def contains_thai_characters(text: str) -> bool:
     return any("\u0e00" <= c <= "\u0e7f" for c in text)
 
 
-async def transcribe_audio_bytes(audio_bytes: bytes, api_key: str, timeout_seconds: int = 45) -> Optional[str]:
+async def transcribe_audio_bytes(audio_bytes: bytes, api_key: str, timeout_seconds: int = 60) -> Optional[str]:
     """Transcribe raw audio bytes using Gemini multimodal audio API."""
     audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
     payload = {
         "contents": [{
             "parts": [
-                {"text": "Provide only the exact transcription of the spoken words in this audio. Do not include any intro, commentary, or notes."},
+                {"text": "Provide a complete and full transcription of all spoken dialogue and words from start to finish in this entire audio. Transcribe every single sentence until the very end without skipping or summarizing. Do not include any intro, commentary, or notes."},
                 {"inlineData": {"mimeType": "audio/mp3", "data": audio_b64}}
             ]
         }],
-        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 2048}
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 8192}
     }
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -86,7 +86,7 @@ async def transcribe_audio_bytes(audio_bytes: bytes, api_key: str, timeout_secon
 
 
 
-async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int = 45) -> str:
+async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int = 60) -> str:
     """Call Google Gemini generateContent endpoint with automatic model failover and strict Khmer enforcement."""
     payload = {
         "systemInstruction": {
@@ -99,7 +99,7 @@ async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int 
         ],
         "generationConfig": {
             "temperature": 0.1,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 8192,
         }
     }
 
@@ -125,7 +125,7 @@ async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int 
                                     rewrite_payload = {
                                         "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
                                         "contents": [{"parts": [{"text": f"Remove all Thai characters and rewrite entirely in 100% pure Khmer language:\n\n{text_result}"}]}],
-                                        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 2048}
+                                        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 8192}
                                     }
                                     async with session.post(url, json=rewrite_payload) as fix_resp:
                                         if fix_resp.status == 200:
@@ -234,17 +234,17 @@ async def translate_media_segmented(
         "You are an expert native Cambodian translator. Translate the following video elements into 100% pure Khmer language (ភាសាខ្មែរ).\n\n"
         "STRICT MANDATORY RULES:\n"
         "1. Write EXCLUSIVELY in pure Cambodian Khmer script (អក្សរខ្មែរ). Absolutely NO Thai language (ภาษาไทย) or Thai characters.\n"
-        "2. Translate all available sections accurately.\n"
+        "2. Translate the entire spoken transcript fully and completely from beginning to end. Do NOT cut short, truncate, or summarize Section 3.\n"
         "3. Output STRICTLY in the following 3-part format:\n\n"
         "1️⃣ <b>ចំណងជើង (Title)៖</b>\n"
         "[Khmer translation of Title]\n\n"
         "2️⃣ <b>សេចក្តីពិពណ៌នា (Description)៖</b>\n"
         "[Khmer translation of Description, or '(គ្មានសេចក្តីពិពណ៌នា)' if empty]\n\n"
         "3️⃣ <b>បកប្រែចេញពីសំឡេងនិយាយផ្ទាល់ក្នុងវីដេអូ (Speech / Transcript)៖</b>\n"
-        "[Khmer translation of the spoken transcript, or '(វីដេអូនេះមិនមានអត្ថបទសំឡេង/Subtitle សម្រាប់ស្រង់ចេញទេ)' if empty]\n\n"
+        "[Full complete Khmer translation of all spoken dialogue and words, or '(វីដេអូនេះមិនមានអត្ថបទសំឡេង/Subtitle សម្រាប់ស្រង់ចេញទេ)' if empty]\n\n"
         f"Input Title:\n{title}\n\n"
         f"Input Description:\n{desc_clean if desc_clean else '(None)'}\n\n"
-        f"Input Spoken Transcript:\n{trans_clean[:3500] if trans_clean else '(None)'}"
+        f"Input Spoken Transcript:\n{trans_clean[:12000] if trans_clean else '(None)'}"
     )
 
     try:

@@ -286,10 +286,29 @@ async def handle_callback_query(
                 lang=lang,
             )
 
-        if len(output_text) > 4000:
-            output_text = output_text[:3990] + "…"
-        if query.message:
-            await query.message.edit_text(output_text, reply_markup=back_kb, parse_mode="HTML")
+        if len(output_text) <= 4000:
+            if query.message:
+                await query.message.edit_text(output_text, reply_markup=back_kb, parse_mode="HTML")
+        else:
+            chunks = []
+            curr = output_text
+            while len(curr) > 4000:
+                split_idx = curr.rfind("\n\n", 0, 3950)
+                if split_idx == -1:
+                    split_idx = curr.rfind("\n", 0, 3950)
+                if split_idx == -1:
+                    split_idx = 3950
+                chunks.append(curr[:split_idx].strip())
+                curr = curr[split_idx:].strip()
+            if curr:
+                chunks.append(curr)
+
+            if query.message:
+                await query.message.edit_text(chunks[0], parse_mode="HTML")
+                for chunk in chunks[1:-1]:
+                    await query.message.reply_text(chunk, parse_mode="HTML")
+                if len(chunks) > 1:
+                    await query.message.reply_text(chunks[-1], reply_markup=back_kb, parse_mode="HTML")
         return
 
     # 2. Main menu choices
