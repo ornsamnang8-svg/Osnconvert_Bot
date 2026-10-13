@@ -259,7 +259,10 @@ async def handle_callback_query(
         if session.media_info.transcript is None:
             if query.message:
                 await query.message.edit_text(t(lang, "status_extracting_transcript"))
-            session.media_info.transcript = await extract_video_transcript(session.media_info.url)
+            session.media_info.transcript = await extract_video_transcript(
+                session.media_info.url,
+                api_key=settings.gemini_api_key,
+            )
 
         if action_val == "tr":
             if query.message:

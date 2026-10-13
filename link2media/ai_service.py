@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 from typing import Optional
 import aiohttp
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,40 @@ SYSTEM_PROMPT = (
 def contains_thai_characters(text: str) -> bool:
     """Check if string contains any Thai Unicode characters (U+0E00 to U+0E7F)."""
     return any("\u0e00" <= c <= "\u0e7f" for c in text)
+
+
+async def transcribe_audio_bytes(audio_bytes: bytes, api_key: str, timeout_seconds: int = 45) -> Optional[str]:
+    """Transcribe raw audio bytes using Gemini multimodal audio API."""
+    audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": "Provide only the exact transcription of the spoken words in this audio. Do not include any intro, commentary, or notes."},
+                {"inlineData": {"mimeType": "audio/mp3", "data": audio_b64}}
+            ]
+        }],
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 2048}
+    }
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for model in MODELS_TO_TRY:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            try:
+                async with session.post(url, json=payload) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        candidates = data.get("candidates") or []
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                return parts[0].get("text", "").strip()
+                    elif resp.status in (429, 503):
+                        continue
+            except Exception as exc:
+                logger.warning("Audio transcription error on %s: %s", model, exc)
+                continue
+    return None
+
 
 
 async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int = 45) -> str:

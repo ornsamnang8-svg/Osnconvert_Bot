@@ -362,14 +362,66 @@ def _extract_transcript_sync(url: str) -> Optional[str]:
         return transcript or None
 
 
-async def extract_video_transcript(url: str, timeout: int = 30) -> Optional[str]:
-    """Asynchronously extract video spoken transcript with timeout guard."""
+def extract_audio_for_transcription_sync(url: str) -> Optional[bytes]:
+    """Download low-bitrate compressed audio stream for AI transcription."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        opts = {
+            "format": "bestaudio/best",
+            "outtmpl": os.path.join(tmpdir, "audio.%(ext)s"),
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "64",
+            }],
+            "quiet": True,
+            "no_warnings": True,
+        }
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            try:
+                ydl.download([url])
+            except Exception as exc:
+                logger.warning("Failed to download audio for transcription from %s: %s", url, exc)
+                return None
+
+        files = [f for f in os.listdir(tmpdir) if f.endswith(".mp3")]
+        if not files:
+            return None
+
+        target = os.path.join(tmpdir, files[0])
+        if os.path.getsize(target) > 18_000_000:
+            logger.warning("Audio file too large for inline AI transcription")
+            return None
+
+        with open(target, "rb") as f:
+            return f.read()
+
+
+async def extract_video_transcript(url: str, api_key: Optional[str] = None, timeout: int = 45) -> Optional[str]:
+    """Asynchronously extract video spoken transcript from subtitles or via AI audio transcription."""
+    # 1. Try subtitles first (fastest)
     try:
-        return await asyncio.wait_for(
+        transcript = await asyncio.wait_for(
             asyncio.to_thread(_extract_transcript_sync, url),
-            timeout=timeout,
+            timeout=15,
         )
+        if transcript:
+            return transcript
     except Exception as exc:
-        logger.warning("Failed to extract transcript for %s: %s", url, exc)
-        return None
+        logger.warning("Subtitles extraction failed for %s: %s", url, exc)
+
+    # 2. Fallback: extract compressed audio and transcribe using Gemini audio API
+    if api_key:
+        try:
+            audio_bytes = await asyncio.wait_for(
+                asyncio.to_thread(extract_audio_for_transcription_sync, url),
+                timeout=25,
+            )
+            if audio_bytes:
+                from .ai_service import transcribe_audio_bytes
+                return await transcribe_audio_bytes(audio_bytes, api_key)
+        except Exception as exc:
+            logger.warning("Audio transcription fallback failed for %s: %s", url, exc)
+
+    return None
+
 
