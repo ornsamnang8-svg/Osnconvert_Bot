@@ -113,7 +113,7 @@ class Settings:
     db_path: Path = PROJECT_ROOT / "data" / "link2media.sqlite3"
     cache_dir: Path = PROJECT_ROOT / "data" / "cache"
 
-    max_duration_seconds: int = 20 * 60
+    max_duration_seconds: int = 4 * 3600
     max_upload_bytes: int = 48_000_000
     max_download_bytes: int = 200_000_000
     max_job_disk_bytes: int = 600_000_000
@@ -200,8 +200,8 @@ def load_settings(env_file: str | os.PathLike | None = None, *,
         temp_dir=data_dir / "tmp",
         db_path=data_dir / "link2media.sqlite3",
         cache_dir=data_dir / "cache",
-        max_duration_seconds=_get_int("MAX_DURATION_SECONDS", 20 * 60, minimum=10,
-                                      maximum=6 * 3600),
+        max_duration_seconds=_get_int("MAX_DURATION_SECONDS", 4 * 3600, minimum=10,
+                                      maximum=24 * 3600),
         max_upload_bytes=max_upload,
         max_download_bytes=max_download,
         max_job_disk_bytes=max_disk,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 from typing import Optional
 import aiohttp
 
@@ -38,11 +39,11 @@ MODELS_TO_TRY = [
 ]
 
 SYSTEM_PROMPT = (
-    "You are a native Cambodian professional linguist and translator specialized strictly in the Khmer language (ភាសាខ្មែរ).\n"
+    "You are a native Cambodian professional linguist and master translator specialized strictly and exclusively in Cambodian Khmer language (ភាសាខ្មែរ).\n"
     "CRITICAL MANDATORY RULES:\n"
-    "1. You must write EXCLUSIVELY in 100% pure Cambodian Khmer language and Khmer script (អក្សរខ្មែរ).\n"
-    "2. ABSOLUTELY FORBIDDEN: NEVER use, mix, or output ANY Thai language (ภาษาไทย), Thai script (Unicode range U+0E00 to U+0E7F), Thai vocabulary, or Lao script under any circumstance.\n"
-    "3. Use standard Cambodian vocabulary, proper spelling, and natural Khmer phrasing.\n"
+    "1. You must write EXCLUSIVELY in 100% authentic Cambodian Khmer language and Khmer script (អក្សរខ្មែរ).\n"
+    "2. ABSOLUTELY FORBIDDEN: NEVER output, use, or mix ANY Thai words, Thai grammar, or Thai Unicode characters (range U+0E00 to U+0E7F). Even if the source text or speech is in Thai, Vietnamese, or English, translate every single concept completely into authentic Cambodian Khmer.\n"
+    "3. Use natural Cambodian vocabulary, correct Khmer spelling, and authentic Cambodian sentence structure.\n"
     "4. Preserve emojis, numbers, and URLs without modification."
 )
 
@@ -52,7 +53,18 @@ def contains_thai_characters(text: str) -> bool:
     return any("\u0e00" <= c <= "\u0e7f" for c in text)
 
 
-async def transcribe_audio_bytes(audio_bytes: bytes, api_key: str, timeout_seconds: int = 60) -> Optional[str]:
+def sanitize_pure_khmer(text: str) -> str:
+    """Ensure text is strictly pure Khmer by completely stripping any stray Thai Unicode characters."""
+    if not contains_thai_characters(text):
+        return text
+    # Strip all Thai Unicode characters (U+0E00 to U+0E7F)
+    cleaned = re.sub(r"[\u0e00-\u0e7f]+", "", text)
+    # Clean up double spaces that might result from removal
+    cleaned = re.sub(r" {2,}", " ", cleaned)
+    return cleaned.strip()
+
+
+async def transcribe_audio_bytes(audio_bytes: bytes, api_key: str, timeout_seconds: int = 120) -> Optional[str]:
     """Transcribe raw audio bytes using Gemini multimodal audio API."""
     audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
     payload = {
@@ -86,7 +98,7 @@ async def transcribe_audio_bytes(audio_bytes: bytes, api_key: str, timeout_secon
 
 
 
-async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int = 60) -> str:
+async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int = 90) -> str:
     """Call Google Gemini generateContent endpoint with automatic model failover and strict Khmer enforcement."""
     payload = {
         "systemInstruction": {
@@ -120,23 +132,30 @@ async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int 
                                 text_result = parts[0].get("text", "").strip()
                                 # Guard against any leaked Thai characters
                                 if contains_thai_characters(text_result):
-                                    logger.warning("Output from %s contained Thai script, cleaning...", model)
-                                    # Request immediate pure-Khmer rewrite
+                                    logger.warning("Output from %s contained Thai script, rewriting to pure Khmer...", model)
                                     rewrite_payload = {
                                         "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-                                        "contents": [{"parts": [{"text": f"Remove all Thai characters and rewrite entirely in 100% pure Khmer language:\n\n{text_result}"}]}],
+                                        "contents": [{"parts": [{"text": (
+                                            "The following text mistakenly contains Thai words or Thai characters. "
+                                            "Replace all Thai words with authentic Cambodian Khmer words and rewrite strictly in 100% pure Khmer language without a single Thai character or word:\n\n"
+                                            f"{text_result}"
+                                        )}]}],
                                         "generationConfig": {"temperature": 0.0, "maxOutputTokens": 8192}
                                     }
-                                    async with session.post(url, json=rewrite_payload) as fix_resp:
-                                        if fix_resp.status == 200:
-                                            fix_data = await fix_resp.json()
-                                            fix_candidates = fix_data.get("candidates") or []
-                                            if fix_candidates:
-                                                fix_parts = fix_candidates[0].get("content", {}).get("parts", [])
-                                                if fix_parts:
-                                                    return fix_parts[0].get("text", "").strip()
+                                    try:
+                                        async with session.post(url, json=rewrite_payload) as fix_resp:
+                                            if fix_resp.status == 200:
+                                                fix_data = await fix_resp.json()
+                                                fix_candidates = fix_data.get("candidates") or []
+                                                if fix_candidates:
+                                                    fix_parts = fix_candidates[0].get("content", {}).get("parts", [])
+                                                    if fix_parts:
+                                                        rewritten = fix_parts[0].get("text", "").strip()
+                                                        return sanitize_pure_khmer(rewritten)
+                                    except Exception as exc:
+                                        logger.warning("Error during Thai cleanup rewrite: %s", exc)
 
-                                return text_result
+                                return sanitize_pure_khmer(text_result)
                     elif resp.status in (429, 503):
                         logger.warning("Gemini model %s busy (%s), trying fallback...", model, resp.status)
                         continue
@@ -233,7 +252,7 @@ async def translate_media_segmented(
     prompt = (
         "You are an expert native Cambodian translator. Translate the following video elements into 100% pure Khmer language (ភាសាខ្មែរ).\n\n"
         "STRICT MANDATORY RULES:\n"
-        "1. Write EXCLUSIVELY in pure Cambodian Khmer script (អក្សរខ្មែរ). Absolutely NO Thai language (ภาษาไทย) or Thai characters.\n"
+        "1. Write EXCLUSIVELY in authentic Cambodian Khmer language and Khmer script (អក្សរខ្មែរ). Absolutely NO Thai language (ภาษาไทย), Thai words, or Thai characters.\n"
         "2. Translate the entire spoken transcript fully and completely from beginning to end. Do NOT cut short, truncate, or summarize Section 3.\n"
         "3. Output STRICTLY in the following 3-part format:\n\n"
         "1️⃣ <b>ចំណងជើង (Title)៖</b>\n"
@@ -244,7 +263,7 @@ async def translate_media_segmented(
         "[Full complete Khmer translation of all spoken dialogue and words, or '(វីដេអូនេះមិនមានអត្ថបទសំឡេង/Subtitle សម្រាប់ស្រង់ចេញទេ)' if empty]\n\n"
         f"Input Title:\n{title}\n\n"
         f"Input Description:\n{desc_clean if desc_clean else '(None)'}\n\n"
-        f"Input Spoken Transcript:\n{trans_clean[:12000] if trans_clean else '(None)'}"
+        f"Input Spoken Transcript:\n{trans_clean[:50000] if trans_clean else '(None)'}"
     )
 
     try:
@@ -270,7 +289,7 @@ async def summarize_media_speech(
     trans_clean = (transcript or "").strip()
 
     if trans_clean:
-        content_to_summarize = f"Video Title: {title}\nSpoken Speech/Transcript:\n{trans_clean[:4000]}"
+        content_to_summarize = f"Video Title: {title}\nSpoken Speech/Transcript:\n{trans_clean[:30000]}"
         focus_instruction = "Summarize specifically from the video's spoken dialogue and speech (សំឡេងនិយាយផ្ទាល់ក្នុងវីដេអូ)."
         note_prefix = "📝 <b>ការសង្ខេបខ្លឹមសារចេញពីសំឡេងនិយាយផ្ទាល់ក្នុងវីដេអូ៖</b>\n\n"
     else:

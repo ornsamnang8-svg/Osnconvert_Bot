@@ -366,13 +366,17 @@ def extract_audio_for_transcription_sync(url: str) -> Optional[bytes]:
     """Download low-bitrate compressed audio stream for AI transcription."""
     with tempfile.TemporaryDirectory() as tmpdir:
         opts = {
-            "format": "bestaudio/best",
+            "format": "ba/b",
             "outtmpl": os.path.join(tmpdir, "audio.%(ext)s"),
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
-                "preferredquality": "64",
+                "preferredquality": "32",
             }],
+            "postprocessor_args": [
+                "-ar", "16000",
+                "-ac", "1",
+            ],
             "quiet": True,
             "no_warnings": True,
         }
@@ -388,21 +392,37 @@ def extract_audio_for_transcription_sync(url: str) -> Optional[bytes]:
             return None
 
         target = os.path.join(tmpdir, files[0])
+        # If audio exceeds 18MB, downsample to 16k mono and trim up to 90 minutes
         if os.path.getsize(target) > 18_000_000:
-            logger.warning("Audio file too large for inline AI transcription")
+            logger.info("Audio file exceeds 18MB, optimizing for AI transcription...")
+            compressed_target = os.path.join(tmpdir, "audio_compressed.mp3")
+            try:
+                import subprocess
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", target, "-t", "5400", "-ar", "16000", "-ac", "1", "-b:a", "16k", compressed_target],
+                    check=True,
+                    capture_output=True,
+                )
+                if os.path.exists(compressed_target) and os.path.getsize(compressed_target) <= 18_000_000:
+                    target = compressed_target
+            except Exception as exc:
+                logger.warning("Failed to optimize large audio: %s", exc)
+
+        if os.path.getsize(target) > 18_000_000:
+            logger.warning("Audio file too large for inline AI transcription (%d bytes)", os.path.getsize(target))
             return None
 
         with open(target, "rb") as f:
             return f.read()
 
 
-async def extract_video_transcript(url: str, api_key: Optional[str] = None, timeout: int = 45) -> Optional[str]:
+async def extract_video_transcript(url: str, api_key: Optional[str] = None, timeout: int = 180) -> Optional[str]:
     """Asynchronously extract video spoken transcript from subtitles or via AI audio transcription."""
-    # 1. Try subtitles first (fastest)
+    # 1. Try subtitles first (fastest, supports any video length including 10+ hours)
     try:
         transcript = await asyncio.wait_for(
             asyncio.to_thread(_extract_transcript_sync, url),
-            timeout=15,
+            timeout=25,
         )
         if transcript:
             return transcript
@@ -414,11 +434,11 @@ async def extract_video_transcript(url: str, api_key: Optional[str] = None, time
         try:
             audio_bytes = await asyncio.wait_for(
                 asyncio.to_thread(extract_audio_for_transcription_sync, url),
-                timeout=25,
+                timeout=120,
             )
             if audio_bytes:
                 from .ai_service import transcribe_audio_bytes
-                return await transcribe_audio_bytes(audio_bytes, api_key)
+                return await transcribe_audio_bytes(audio_bytes, api_key, timeout_seconds=120)
         except Exception as exc:
             logger.warning("Audio transcription fallback failed for %s: %s", url, exc)
 
