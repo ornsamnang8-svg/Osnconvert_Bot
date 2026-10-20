@@ -63,13 +63,15 @@ async def test_summarize_media_speech():
 
 
 def test_sanitize_pure_khmer():
-    from link2media.ai_service import sanitize_pure_khmer, contains_thai_characters
-    mixed_text = "សួស្តី สวัสดี ពិភពលោក เรื่องราว"
-    assert contains_thai_characters(mixed_text) is True
+    from link2media.ai_service import sanitize_pure_khmer, contains_foreign_scripts
+    mixed_text = "សួស្តី สวัสดี ពិភពលោក 特斯拉 thế giới ສະບាយດີ"
+    assert contains_foreign_scripts(mixed_text) is True
     cleaned = sanitize_pure_khmer(mixed_text)
-    assert contains_thai_characters(cleaned) is False
+    assert contains_foreign_scripts(cleaned) is False
     assert "សួស្តី" in cleaned
     assert "ពិភពលោក" in cleaned
     assert "สวัสดี" not in cleaned
-    assert "เรื่องราว" not in cleaned
+    assert "特斯拉" not in cleaned
+    assert "thế giới" not in cleaned
+    assert "ສະບាយດີ" not in cleaned
 

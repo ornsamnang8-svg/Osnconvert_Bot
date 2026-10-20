@@ -38,27 +38,53 @@ MODELS_TO_TRY = [
     "gemini-3.8-flash",
 ]
 
+# Disallowed foreign scripts (Thai, Lao, Burmese, Chinese/CJK, Japanese, Korean, Arabic, Cyrillic, Devanagari, Vietnamese)
+DISALLOWED_FOREIGN_SCRIPTS_RE = re.compile(
+    r"["
+    r"\u0e00-\u0e7f"  # Thai
+    r"\u0e80-\u0eff"  # Lao
+    r"\u1000-\u109f"  # Burmese
+    r"\u4e00-\u9fff"  # Chinese / CJK Ideographs
+    r"\u3400-\u4dbf"  # CJK Extension A
+    r"\uf900-\ufaff"  # CJK Compatibility
+    r"\u3040-\u30ff"  # Japanese Hiragana & Katakana
+    r"\uac00-\ud7af"  # Korean Hangul
+    r"\u1100-\u11ff"  # Korean Jamo
+    r"\u0600-\u06ff"  # Arabic
+    r"\u0400-\u04ff"  # Cyrillic
+    r"\u0900-\u097f"  # Devanagari / Hindi
+    r"\u1ea0-\u1ef9"  # Vietnamese Latin Extended
+    r"đĐ"              # Vietnamese d with stroke
+    r"]"
+)
+
 SYSTEM_PROMPT = (
     "You are a native Cambodian professional linguist and master translator specialized strictly and exclusively in Cambodian Khmer language (ភាសាខ្មែរ).\n"
     "CRITICAL MANDATORY RULES:\n"
     "1. You must write EXCLUSIVELY in 100% authentic Cambodian Khmer language and Khmer script (អក្សរខ្មែរ).\n"
-    "2. ABSOLUTELY FORBIDDEN: NEVER output, use, or mix ANY Thai words, Thai grammar, or Thai Unicode characters (range U+0E00 to U+0E7F). Even if the source text or speech is in Thai, Vietnamese, or English, translate every single concept completely into authentic Cambodian Khmer.\n"
-    "3. Use natural Cambodian vocabulary, correct Khmer spelling, and authentic Cambodian sentence structure.\n"
-    "4. Preserve emojis, numbers, and URLs without modification."
+    "2. ABSOLUTELY FORBIDDEN: NEVER output, mix, or retain ANY foreign languages or scripts other than standard English technical terms/proper names in parentheses. Strictly NO Thai (ภาษาไทย), Vietnamese (Tiếng Việt), Chinese (中文), Lao (ລາວ), Burmese, Japanese, Arabic, or any other foreign language or character.\n"
+    "3. If the input media (title, description, speech, or text) is in Thai, Vietnamese, Chinese, Spanish, French, or any other language, TRANSLATE EVERY SINGLE WORD AND CONCEPT completely into natural Cambodian Khmer.\n"
+    "4. Use natural Cambodian vocabulary, correct Khmer spelling, and authentic Cambodian sentence structure.\n"
+    "5. Preserve emojis, numbers, and URLs without modification."
 )
 
 
+def contains_foreign_scripts(text: str) -> bool:
+    """Check if string contains any disallowed foreign scripts (Thai, Lao, Burmese, Chinese, Vietnamese, Arabic, etc.)."""
+    return bool(DISALLOWED_FOREIGN_SCRIPTS_RE.search(text))
+
+
 def contains_thai_characters(text: str) -> bool:
-    """Check if string contains any Thai Unicode characters (U+0E00 to U+0E7F)."""
-    return any("\u0e00" <= c <= "\u0e7f" for c in text)
+    """Backward-compatible helper checking if string contains any foreign scripts."""
+    return contains_foreign_scripts(text)
 
 
 def sanitize_pure_khmer(text: str) -> str:
-    """Ensure text is strictly pure Khmer by completely stripping any stray Thai Unicode characters."""
-    if not contains_thai_characters(text):
+    """Ensure text is strictly pure Khmer by completely stripping any disallowed foreign scripts (Thai, Chinese, Vietnamese, Lao, etc.)."""
+    if not contains_foreign_scripts(text):
         return text
-    # Strip all Thai Unicode characters (U+0E00 to U+0E7F)
-    cleaned = re.sub(r"[\u0e00-\u0e7f]+", "", text)
+    # Strip any disallowed foreign characters
+    cleaned = DISALLOWED_FOREIGN_SCRIPTS_RE.sub("", text)
     # Clean up double spaces that might result from removal
     cleaned = re.sub(r" {2,}", " ", cleaned)
     return cleaned.strip()
@@ -130,14 +156,15 @@ async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int 
                             parts = candidates[0].get("content", {}).get("parts", [])
                             if parts:
                                 text_result = parts[0].get("text", "").strip()
-                                # Guard against any leaked Thai characters
-                                if contains_thai_characters(text_result):
-                                    logger.warning("Output from %s contained Thai script, rewriting to pure Khmer...", model)
+                                # Guard against any leaked foreign characters (Thai, Chinese, Vietnamese, Lao, etc.)
+                                if contains_foreign_scripts(text_result):
+                                    logger.warning("Output from %s contained foreign script, rewriting to pure Khmer...", model)
                                     rewrite_payload = {
                                         "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
                                         "contents": [{"parts": [{"text": (
-                                            "The following text mistakenly contains Thai words or Thai characters. "
-                                            "Replace all Thai words with authentic Cambodian Khmer words and rewrite strictly in 100% pure Khmer language without a single Thai character or word:\n\n"
+                                            "The following text mistakenly contains foreign language words or foreign script (such as Thai, Vietnamese, Chinese, Lao, etc.). "
+                                            "Translate and rewrite ALL foreign words and scripts into 100% authentic Cambodian Khmer language (ភាសាខ្មែរ). "
+                                            "Do NOT output a single foreign word or foreign character (only Khmer and standard English proper nouns in parentheses are permitted):\n\n"
                                             f"{text_result}"
                                         )}]}],
                                         "generationConfig": {"temperature": 0.0, "maxOutputTokens": 8192}
@@ -153,7 +180,7 @@ async def _call_gemini_generate(prompt: str, api_key: str, timeout_seconds: int 
                                                         rewritten = fix_parts[0].get("text", "").strip()
                                                         return sanitize_pure_khmer(rewritten)
                                     except Exception as exc:
-                                        logger.warning("Error during Thai cleanup rewrite: %s", exc)
+                                        logger.warning("Error during foreign script cleanup rewrite: %s", exc)
 
                                 return sanitize_pure_khmer(text_result)
                     elif resp.status in (429, 503):
@@ -188,8 +215,8 @@ async def translate_to_khmer(
     prompt = (
         "Translate the following text into 100% pure Cambodian Khmer language (ភាសាខ្មែរ).\n\n"
         "STRICT MANDATORY REQUIREMENTS:\n"
-        "- Write strictly in Cambodian Khmer script (អក្សរខ្មែរ).\n"
-        "- DO NOT use, borrow, or mix ANY Thai language (ภาษาไทย) or Thai characters.\n"
+        "- Write strictly in authentic Cambodian Khmer script (អក្សរខ្មែរ).\n"
+        "- ABSOLUTELY FORBIDDEN: Strictly NO Thai, Vietnamese, Chinese, Lao, Burmese, or other foreign languages or characters. Everything must be translated completely into Khmer (only English proper nouns in parentheses are permitted).\n"
         "- Ensure smooth, natural, and accurate Cambodian Khmer phrasing.\n"
         "- Output ONLY the translated Khmer text without intro or outro.\n\n"
         f"Original text:\n{cleaned_text}"
@@ -208,7 +235,7 @@ async def summarize_in_khmer(
     api_key: Optional[str] = None,
     lang: str = "km",
 ) -> str:
-    """Summarize text strictly into 100% pure Khmer without any Thai language."""
+    """Summarize text strictly into 100% pure Khmer without any foreign languages."""
     cleaned_text = text.strip()
     if not cleaned_text:
         return "❌ មិនមានអត្ថបទសម្រាប់សង្ខេបទេ (Empty text)"
@@ -219,8 +246,8 @@ async def summarize_in_khmer(
     prompt = (
         "Summarize the following content concisely and clearly in 100% pure Cambodian Khmer language (ភាសាខ្មែរ).\n\n"
         "STRICT MANDATORY REQUIREMENTS:\n"
-        "- Write strictly in Cambodian Khmer script (អក្សរខ្មែរ).\n"
-        "- DO NOT use, borrow, or mix ANY Thai language (ภาษาไทย) or Thai characters.\n"
+        "- Write strictly in authentic Cambodian Khmer script (អក្សរខ្មែរ).\n"
+        "- ABSOLUTELY FORBIDDEN: Strictly NO Thai, Vietnamese, Chinese, Lao, or other foreign languages or characters.\n"
         "- Highlight core ideas using clean bullet points (🔹 or •).\n"
         "- Write naturally and elegantly in Cambodian Khmer.\n"
         "- Output ONLY the summary in Khmer.\n\n"
@@ -252,7 +279,7 @@ async def translate_media_segmented(
     prompt = (
         "You are an expert native Cambodian translator. Translate the following video elements into 100% pure Khmer language (ភាសាខ្មែរ).\n\n"
         "STRICT MANDATORY RULES:\n"
-        "1. Write EXCLUSIVELY in authentic Cambodian Khmer language and Khmer script (អក្សរខ្មែរ). Absolutely NO Thai language (ภาษาไทย), Thai words, or Thai characters.\n"
+        "1. Write EXCLUSIVELY in authentic Cambodian Khmer language and Khmer script (អក្សរខ្មែរ). Strictly NO Thai, Vietnamese, Chinese, Lao, Burmese, or any other foreign language words or characters. Everything must be translated completely into authentic Khmer (only English proper names in parentheses are allowed).\n"
         "2. Translate the entire spoken transcript fully and completely from beginning to end. Do NOT cut short, truncate, or summarize Section 3.\n"
         "3. Output STRICTLY in the following 3-part format:\n\n"
         "1️⃣ <b>ចំណងជើង (Title)៖</b>\n"
@@ -301,7 +328,7 @@ async def summarize_media_speech(
         f"You are an expert content analyzer. {focus_instruction}\n"
         "Write strictly in 100% pure Cambodian Khmer language (ភាសាខ្មែរ).\n\n"
         "STRICT MANDATORY RULES:\n"
-        "1. Write EXCLUSIVELY in pure Cambodian Khmer script (អក្សរខ្មែរ). Absolutely NO Thai language (ภาษาไทย) or Thai characters.\n"
+        "1. Write EXCLUSIVELY in authentic Cambodian Khmer script (អក្សរខ្មែរ). Strictly NO Thai, Vietnamese, Chinese, Lao, or any other foreign language or characters.\n"
         "2. Structure with clear, high-value key takeaways using bullet points (🔹 or •).\n"
         "3. Output ONLY the summary points in Khmer without intro or outro.\n\n"
         f"Content to summarize:\n{content_to_summarize}"
