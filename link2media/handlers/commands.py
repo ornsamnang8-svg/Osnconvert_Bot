@@ -18,9 +18,7 @@ router = Router(name="commands")
 
 
 def is_allowed_user(message: Message, settings: Settings) -> bool:
-    """Verify private chat and optional user allowlist."""
-    if message.chat.type != "private":
-        return False
+    """Verify optional user allowlist."""
     if not settings.allowed_user_ids:
         return True
     return bool(message.from_user and message.from_user.id in settings.allowed_user_ids)
@@ -28,9 +26,6 @@ def is_allowed_user(message: Message, settings: Settings) -> bool:
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, settings: Settings, queue_mgr: QueueManager) -> None:
-    if message.chat.type != "private":
-        await message.reply(t("en", "private_chat_only"))
-        return
     if not is_allowed_user(message, settings):
         await message.reply(t("km", "not_allowed"))
         return
@@ -42,9 +37,6 @@ async def cmd_start(message: Message, settings: Settings, queue_mgr: QueueManage
 
 @router.message(Command("help"))
 async def cmd_help(message: Message, settings: Settings) -> None:
-    if message.chat.type != "private":
-        await message.reply(t("en", "private_chat_only"))
-        return
     if not is_allowed_user(message, settings):
         await message.reply(t("km", "not_allowed"))
         return
@@ -62,9 +54,6 @@ async def cmd_help(message: Message, settings: Settings) -> None:
 
 @router.message(Command("language"))
 async def cmd_language(message: Message, settings: Settings) -> None:
-    if message.chat.type != "private":
-        await message.reply(t("en", "private_chat_only"))
-        return
     if not is_allowed_user(message, settings):
         await message.reply(t("km", "not_allowed"))
         return
@@ -79,8 +68,6 @@ async def cmd_language(message: Message, settings: Settings) -> None:
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, settings: Settings, queue_mgr: QueueManager) -> None:
-    if message.chat.type != "private":
-        return
     user_id = message.from_user.id if message.from_user else 0
     lang = await get_user_language(settings.db_path, user_id)
 

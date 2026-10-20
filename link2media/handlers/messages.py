@@ -32,10 +32,6 @@ async def handle_incoming_text(
     queue_mgr: QueueManager,
 ) -> None:
     """Process incoming chat messages containing media URLs or text to translate/summarize."""
-    if message.chat.type != "private":
-        await message.reply(t("en", "private_chat_only"))
-        return
-
     if not is_allowed_user(message, settings):
         await message.reply(t("km", "not_allowed"))
         return
@@ -43,9 +39,28 @@ async def handle_incoming_text(
     text = (message.text or message.caption or "").strip()
     user_id = message.from_user.id if message.from_user else 0
     lang = await get_user_language(settings.db_path, user_id)
+    is_group = message.chat.type in ("group", "supergroup")
 
     urls = extract_urls(text)
     if not urls:
+        # In a group chat, ignore regular chat messages unless replying to or mentioning the bot
+        if is_group:
+            bot_info = await bot.get_me()
+            is_reply_to_bot = bool(
+                message.reply_to_message
+                and message.reply_to_message.from_user
+                and message.reply_to_message.from_user.id == bot_info.id
+            )
+            bot_username = (bot_info.username or "").lower()
+            is_mentioned = bool(bot_username and f"@{bot_username}" in text.lower())
+
+            if not (is_reply_to_bot or is_mentioned):
+                return
+
+            if bot_username:
+                import re
+                text = re.sub(rf"@{bot_username}\b", "", text, flags=re.IGNORECASE).strip()
+
         if len(text) >= 2:
             session_id = uuid.uuid4().hex[:8]
             session = TextSession(
@@ -62,7 +77,8 @@ async def handle_incoming_text(
             await message.reply(reply_text, reply_markup=kb, parse_mode="HTML")
             return
 
-        await message.reply(t(lang, "send_link_hint"))
+        if not is_group:
+            await message.reply(t(lang, "send_link_hint"))
         return
 
     if len(urls) > 1:
